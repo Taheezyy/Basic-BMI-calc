@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; form-action 'none'; base-uri 'none'">
+<title>BMI Calculator</title>
+<style>
+  /* Page-level only; everything else is scoped under .bmi. */
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: #f9fafb;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      "Helvetica Neue", Arial, sans-serif;
+  }
+
+  .bmi {
+    --bmi-blue: #1d4ed8;
+    --bmi-green: #15803d;
+    --bmi-text: #111827;
+    --bmi-muted: #4b5563;
+    --bmi-border: #6b7280;
+    --bmi-red: #b91c1c;
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 24px 16px 40px;
+    box-sizing: border-box;
+    color: var(--bmi-text);
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+  .bmi *, .bmi *::before, .bmi *::after { box-sizing: border-box; }
+  .bmi :focus-visible { outline: 3px solid var(--bmi-blue); outline-offset: 2px; }
+
+  /* ---- Header ---- */
+  .bmi__title {
+    margin: 0 0 4px;
+    padding-bottom: 6px;
+    font-size: 1.75rem;
+    line-height: 1.2;
+    border-bottom: 3px solid var(--bmi-green);
+    display: inline-block;
+  }
+  .bmi__disclaimer { margin: 8px 0 20px; color: var(--bmi-muted); }
+
+  /* ---- Form fields ---- */
+  .bmi fieldset { margin: 0 0 16px; padding: 0; border: 0; min-width: 0; }
+  .bmi legend, .bmi__label { display: block; padding: 0; margin: 0 0 6px; font-weight: 600; }
+  .bmi__field { margin: 0 0 16px; }
+  .bmi__input {
+    display: block;
+    width: 100%;
+    min-height: 48px;
+    padding: 8px 12px;
+    font: inherit;
+    font-size: 1rem;           /* 16px: stops iOS zoom on focus */
+    color: var(--bmi-text);
+    background: #ffffff;
+    border: 1px solid var(--bmi-border);
+    border-radius: 8px;
+  }
+  .bmi__input.is-invalid { border: 2px solid var(--bmi-red); }
+  .bmi__pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .bmi__pair .bmi__field { margin: 0; }
+  .bmi__error { margin: 6px 0 0; color: var(--bmi-red); font-weight: 600; }
+  #height-error:not([hidden]) { margin-bottom: 16px; }
+  .bmi__error--form { margin: 0 0 12px; }
+
+  /* ---- Segmented radio control (units, sex) ---- */
+  .bmi__segments {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border: 1px solid var(--bmi-border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #ffffff;
+  }
+  .bmi__segments.is-invalid { border: 2px solid var(--bmi-red); }
+  /* Each segment is a <label> wrapping its radio. The radio fills the label (a 48px
+     target) but is see-through; the span draws the look. */
+  .bmi__segment { position: relative; display: block; min-height: 48px; cursor: pointer; }
+  .bmi__segment + .bmi__segment { border-left: 1px solid var(--bmi-border); }
+  .bmi__segment input {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    margin: 0; opacity: 0; cursor: pointer;
+  }
+  .bmi__segment span {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 48px; padding: 8px 12px; text-align: center; pointer-events: none;
+  }
+  .bmi__segment input:checked + span { background: var(--bmi-blue); color: #ffffff; font-weight: 700; }
+  .bmi__segment input:checked + span::before { content: "\2713\00a0"; }
+  .bmi__segment input:focus-visible + span { outline: 3px solid var(--bmi-blue); outline-offset: -3px; box-shadow: inset 0 0 0 5px #ffffff; }
+
+  .bmi__submit {
+    display: block; width: 100%; min-height: 48px;
+    padding: 8px 16px; font: inherit; font-size: 1.0625rem; font-weight: 700;
+    color: #ffffff; background: var(--bmi-blue);
+    border: 0; border-radius: 8px; cursor: pointer;
+  }
+
+  /* ---- Result card ---- */
+  .bmi__card {
+    margin-top: 24px; padding: 16px 16px 16px 14px;
+    border-left: 6px solid var(--bmi-border); border-radius: 8px;
+    background: #f9fafb;
+  }
+  .bmi__card--underweight { border-left-color: #0369a1; background: #f0f9ff; --bmi-cat: #0369a1; }
+  .bmi__card--healthy     { border-left-color: #166534; background: #f0fdf4; --bmi-cat: #166534; }
+  .bmi__card--overweight  { border-left-color: #92400e; background: #fffbeb; --bmi-cat: #92400e; }
+  .bmi__card--obesity     { border-left-color: #b91c1c; background: #fef2f2; --bmi-cat: #b91c1c; }
+  .bmi__card p { margin: 0 0 8px; }
+  .bmi__card p:last-child { margin-bottom: 0; }
+  .bmi__bmi-label { color: var(--bmi-muted); }
+  .bmi__bmi-value { font-size: clamp(2.5rem, 12vw, 3.5rem); font-weight: 800; line-height: 1.1; }
+  .bmi__category { font-size: 1.375rem; font-weight: 700; color: var(--bmi-cat); }
+  .bmi__percentile { font-size: 1.125rem; font-weight: 600; }
+  .bmi__bodyfat { font-size: 1.125rem; font-weight: 600; }
+  .bmi__healthy { color: var(--bmi-green); font-weight: 700; }
+  .bmi__muted { color: var(--bmi-muted); }
+  .bmi__sr-only {
+    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
+  /* ---- About ---- */
+  .bmi__about { margin-top: 24px; }
+  .bmi__about summary { min-height: 44px; padding: 10px 0; font-weight: 600; cursor: pointer; }
+  .bmi__about ul { margin: 4px 0 0; padding-left: 20px; }
+  .bmi__about li { margin-bottom: 6px; }
+  .bmi__about p { margin: 8px 0; }
+</style>
+</head>
+<body>
+<main class="bmi">
+  <h1 class="bmi__title">BMI calculator</h1>
+  <p class="bmi__disclaimer">A screening tool, not medical advice.</p>
+
+  <form id="bmi-form" novalidate autocomplete="off">
+    <fieldset>
+      <legend>Units</legend>
+      <div class="bmi__segments">
+        <label class="bmi__segment">
+          <input type="radio" name="units" id="units-metric" value="metric" checked>
+          <span>Metric (kg, cm)</span>
+        </label>
+        <label class="bmi__segment">
+          <input type="radio" name="units" id="units-imperial" value="imperial">
+          <span>Imperial (lb, ft + in)</span>
+        </label>
+      </div>
+    </fieldset>
+
+    <div class="bmi__field" id="height-metric">
+      <label class="bmi__label" for="height-cm">Height (cm)</label>
+      <input class="bmi__input" id="height-cm" type="text" inputmode="decimal">
+    </div>
+    <fieldset id="height-imperial" hidden>
+      <legend>Height</legend>
+      <div class="bmi__pair">
+        <div class="bmi__field">
+          <label class="bmi__label" for="height-ft">Feet (ft)</label>
+          <input class="bmi__input" id="height-ft" type="text" inputmode="numeric">
+        </div>
+        <div class="bmi__field">
+          <label class="bmi__label" for="height-in">Inches (in)</label>
+          <input class="bmi__input" id="height-in" type="text" inputmode="decimal">
+        </div>
+      </div>
+    </fieldset>
+    <p class="bmi__error" id="height-error" hidden></p>
+
+    <div class="bmi__field">
+      <label class="bmi__label" for="weight" id="weight-label">Weight (kg)</label>
+      <input class="bmi__input" id="weight" type="text" inputmode="decimal">
+      <p class="bmi__error" id="weight-error" hidden></p>
+    </div>
+
+    <div class="bmi__field">
+      <label class="bmi__label" for="age">Age (years)</label>
+      <input class="bmi__input" id="age" type="text" inputmode="numeric">
+      <p class="bmi__error" id="age-error" hidden></p>
+    </div>
+
+    <fieldset id="sex-group">
+      <legend>Sex (used by growth charts)</legend>
+      <div class="bmi__segments" id="sex-segments">
+        <label class="bmi__segment">
+          <input type="radio" name="sex" id="sex-male" value="male">
+          <span>Male</span>
+        </label>
+        <label class="bmi__segment">
+          <input type="radio" name="sex" id="sex-female" value="female">
+          <span>Female</span>
+        </label>
+      </div>
+      <p class="bmi__error" id="sex-error" hidden></p>
+    </fieldset>
+
+    <p class="bmi__error bmi__error--form" id="form-error" hidden></p>
+    <button class="bmi__submit" type="submit">Calculate</button>
+  </form>
+
+  <!-- Screen-reader summary of the fields that need attention (filled on a failed Calculate). -->
+  <div aria-live="polite"><p class="bmi__sr-only" id="error-summary"></p></div>
+
+  <!-- Live region stays in the page; the card inside is filled and shown on a valid Calculate. -->
+  <div id="bmi-result" aria-live="polite"></div>
+
+  <details class="bmi__about">
+    <summary>About this calculator</summary>
+    <ul>
+      <li>BMI cannot tell muscle from fat, so a muscular person can have a high BMI without excess body fat.</li>
+      <li>Bone density is not included, because it cannot be estimated from height, weight, age and sex.</li>
+      <li>Ages 16 to 19 use BMI-for-age percentiles; ages 20 and over use adult BMI categories and an averaged body-fat estimate.</li>
+    </ul>
+    <p>Sources:</p>
+    <ul>
+      <li>CDC 2000 BMI-for-age growth charts</li>
+      <li>WHO adult BMI classification</li>
+      <li>Deurenberg et al. 1991</li>
+      <li>Gallagher et al. 2000</li>
+      <li>CUN-BAE (G&oacute;mez-Ambrosi et al. 2012)</li>
+    </ul>
+  </details>
+</main>
+
+<script id="bmi-logic">
+/* ===== Pure logic: no DOM. Tested by extracting this block with node:vm. ===== */
+
+/* Unit constants: the single source for every conversion. */
+var LB_TO_KG = 0.45359237;   // exact
+var CM_PER_IN = 2.54;        // exact
+var Z_95 = 1.6448536;        // z-score of the 95th percentile
+
+/* One table for validation AND message text. The metric limits are the only range limits:
+   imperial entries are converted to cm/kg, rounded to 0.1, and checked against them. */
+var LIMITS = {
+  age:      { min: 16, max: 100 },
+  bmi:      { min: 10, max: 80 },   // combination check on the displayed (1 dp) BMI
+  metric:   { heightCm: { min: 100, max: 250 }, weightKg: { min: 30, max: 300 } },
+  imperial: { inchesPart: { min: 0, maxExclusive: 12 } }   // format rule only: the inches box is 0 <= in < 12
+};
+
+/* Cut-offs that classify a BMI. Each number is where that category STARTS.
+   Adult: BMI values. Teen: CDC BMI-for-age percentiles. */
+var THRESHOLDS = {
+  adult:          { healthy: 18.5, overweight: 25, obesity: 30 },
+  teenPercentile: { healthy: 5, overweight: 85, obesity: 95 },
+  severe:         { bmi: 35, p95Multiple: 1.2 },  // teen severe obesity: BMI >= 35 or >= 1.2 x the 95th percentile BMI
+  healthyMaxBmi: 24.9                             // top of the healthy-weight range (the bottom is adult.healthy)
+};
+
+var CATEGORY_LABELS = {
+  underweight: 'Underweight',
+  healthy: 'Healthy weight',
+  overweight: 'Overweight',
+  obesity: 'Obesity',
+  severe: 'Obesity (severe)'
+};
+
+/* Must match the CDC_LMS rows embedded below and LIMITS.age.min: the table only covers ages 16–19 at age*12+6 months. */
+var TEEN_ROUTE = {
+  maxAge: 19,         // age <= 19 uses the teen (percentile) route
+  ageMonthsOffset: 6  // whole years -> months at mid-year: age * 12 + 6
+};
+
+/* Official CDC 2000 BMI-for-age LMS parameters, copied exactly (no rounding)
+   from cdc_bmiagerev (Agemos 190.5-240.5). Only the rows next to the four
+   midpoint ages are kept: age*12+6 = 198, 210, 222, 234 months, which sit
+   between the x.5-month rows, so L, M, S are interpolated linearly.
+   Row format: [Agemos, L, M, S]. */
+var CDC_LMS = {
+  male: [
+    [197.5, -2.000706389, 20.84574003, 0.133717552],
+    [198.5, -1.993150137, 20.90294449, 0.1336202],
+    [209.5, -1.915192685, 21.51952414, 0.132653664],
+    [210.5, -1.908831065, 21.57417053, 0.132584784],
+    [221.5, -1.852827186, 22.15475603, 0.132233201],
+    [222.5, -1.849323204, 22.20541249, 0.132248993],
+    [233.5, -1.832820974, 22.73455713, 0.133174129],
+    [234.5, -1.833400825, 22.7798953, 0.133338999],
+  ],
+  female: [
+    [197.5, -2.158937201, 20.65110506, 0.148467715],
+    [198.5, -2.167044578, 20.6891237, 0.148349348],
+    [209.5, -2.254885145, 21.07048996, 0.147369174],
+    [210.5, -2.26238209, 21.10163241, 0.147323144],
+    [221.5, -2.331428139, 21.40214589, 0.147580453],
+    [222.5, -2.336038473, 21.42548351, 0.147689289],
+    [233.5, -2.359710258, 21.635387, 0.150161492],
+    [234.5, -2.358980464, 21.65006126, 0.150520734],
+  ]
+};
+
+/* ---------- Parsing and conversion ---------- */
+
+/* Number or numeric text -> number; anything else (blank, "abc") -> NaN. */
+function parseNumber(value) {
+  if (typeof value === 'number') return isFinite(value) ? value : NaN;
+  if (typeof value !== 'string') return NaN;
+  var text = value.trim();
+  return /^-?(\d+\.?\d*|\.\d+)$/.test(text) ? Number(text) : NaN;
+}
+
+function isBlank(value) {
+  return value === undefined || value === null || String(value).trim() === '';
+}
+
+/* toPrecision strips float noise so exact halves round up (33.8 kg at 104 cm -> 31.3). */
+function round1(n) { return Math.round(Number((n * 10).toPrecision(12))) / 10; }
+
+function lbToKg(lb) { return lb * LB_TO_KG; }
+function kgToLb(kg) { return kg / LB_TO_KG; }
+function ftInToCm(ft, inches) { return (ft * 12 + inches) * CM_PER_IN; }
+
+/* cm -> {ft, inches} with inches rounded to 1 dp (carries 11.95+ into the next foot). */
+function cmToFtIn(cm) {
+  var totalIn = cm / CM_PER_IN;
+  var ft = Math.floor(totalIn / 12);
+  var inches = round1(totalIn - ft * 12);
+  if (inches >= 12) { ft += 1; inches = 0; }
+  return { ft: ft, inches: inches };
+}
+
+/* Blank counts as 0; anything else is parsed (NaN if unreadable). */
+function blankAsZero(value) {
+  return isBlank(value) ? 0 : parseNumber(value);
+}
+
+/* Imperial inches field: blank counts as 0 once feet is given. */
+function imperialInches(input) {
+  return blankAsZero(input.heightIn);
+}
+
+/* Error code for a field that parsed to NaN: blank = missing, anything else = not a number. */
+function badNumberCode(raw) { return isBlank(raw) ? 'MISSING_VALUE' : 'NOT_A_NUMBER'; }
+
+/* Parse every field of an input once. NaN = missing/unreadable (p.raw keeps the typed values
+   so the checks can tell blank from text). No range checks here. */
+function readInput(input) {
+  var p = { imperial: input.units === 'imperial', age: parseNumber(input.age), raw: input };
+  if (p.imperial) {
+    p.feet = parseNumber(input.heightFt);
+    p.inches = imperialInches(input);
+    p.totalIn = p.feet * 12 + p.inches;
+    p.weightLb = parseNumber(input.weightLb);
+    p.heightCm = ftInToCm(p.feet, p.inches);
+    p.weightKg = lbToKg(p.weightLb);
+  } else {
+    p.heightCm = parseNumber(input.heightCm);
+    p.weightKg = parseNumber(input.weightKg);
+  }
+  return p;
+}
+
+/* input -> {heightCm, weightKg} (NaN where missing/unreadable). */
+function toMetric(input) {
+  var p = readInput(input);
+  return { heightCm: p.heightCm, weightKg: p.weightKg };
+}
+
+/* toFixed() writes exponent text from 1e21 up and Infinity/NaN are not numbers a field can show,
+   so such values count as unconvertible: switchUnits carries the typed text over instead. */
+function isConvertible(x) { return isFinite(x) && Math.abs(x) < 1e21; }
+function toOneDp(x) { return isConvertible(x) ? x.toFixed(1) : null; }
+
+function typedText(value) { return value === undefined || value === null ? '' : String(value); }
+
+/* Unit switch: convert the fields already typed. Blank stays blank; text that cannot be
+   read is carried over unchanged (never blanked) so validation can report it later.
+   values: {heightCm, weightKg, heightFt, heightIn, weightLb} as typed text.
+   Returns only the fields of the target unit, as 1-dp text. */
+function switchUnits(values, toUnits) {
+  var out = {};
+  if (toUnits === 'imperial') {
+    var cm = parseNumber(values.heightCm);
+    var kg = parseNumber(values.weightKg);
+    if (!isConvertible(cm)) {   // NaN, Infinity or too large to convert
+      out.heightFt = typedText(values.heightCm);
+      out.heightIn = '';
+    } else {
+      var fi = cmToFtIn(cm);
+      out.heightFt = String(fi.ft);
+      out.heightIn = fi.inches.toFixed(1);
+    }
+    var lbText = toOneDp(kgToLb(kg));
+    out.weightLb = lbText === null ? typedText(values.weightKg) : lbText;
+  } else {
+    var lb = parseNumber(values.weightLb);
+    var kgText = toOneDp(lbToKg(lb));
+    out.weightKg = kgText === null ? typedText(values.weightLb) : kgText;
+    if (isBlank(values.heightFt)) {
+      out.heightCm = '';   // blank feet is a missing height (as on Calculate), even with inches typed
+    } else {
+      var ft = parseNumber(values.heightFt);
+      var inches = blankAsZero(values.heightIn);
+      var cmText = toOneDp(ftInToCm(ft, inches));
+      if (isNaN(ft)) out.heightCm = typedText(values.heightFt);
+      else if (isNaN(inches)) out.heightCm = typedText(values.heightIn);
+      else out.heightCm = cmText === null ? typedText(values.heightFt) : cmText;
+    }
+  }
+  return out;
+}
+
+/* ---------- Core formulas ---------- */
+
+function bmi(kg, m) { return kg / (m * m); }
+
+function clampPercent(x) { return Math.min(100, Math.max(0, x)); }
+
+/* sex: 'male' | 'female'. Uses the unrounded BMI. Each formula is clamped to 0-100%. */
+function bodyFat(bmiValue, age, sex) {
+  var male = sex === 'male' ? 1 : 0;       // S in Deurenberg / Gallagher
+  var female = sex === 'female' ? 1 : 0;   // F in CUN-BAE (opposite coding)
+  var b = bmiValue;
+
+  var deurenberg = 1.2 * b + 0.23 * age - 10.8 * male - 5.4;
+  var gallagher = 64.5 - 848 * (1 / b) + 0.079 * age - 16.4 * male
+    + 0.05 * male * age + 39.0 * male * (1 / b);
+  var cunbae = -44.988 + 0.503 * age + 10.689 * female + 3.172 * b - 0.026 * b * b
+    + 0.181 * b * female - 0.02 * b * age - 0.005 * b * b * female
+    + 0.00021 * b * b * age;
+
+  // At extreme (but valid) inputs a formula can leave 0-100%; clamp each one before averaging.
+  var clamped = [deurenberg, gallagher, cunbae].some(function (x) { return x < 0 || x > 100; });
+  deurenberg = clampPercent(deurenberg);
+  gallagher = clampPercent(gallagher);
+  cunbae = clampPercent(cunbae);
+
+  return {
+    deurenberg: deurenberg,
+    gallagher: gallagher,
+    cunbae: cunbae,
+    average: (deurenberg + gallagher + cunbae) / 3,
+    min: Math.min(deurenberg, gallagher, cunbae),
+    max: Math.max(deurenberg, gallagher, cunbae),
+    clamped: clamped   // true when any raw formula value was outside 0-100%
+  };
+}
+
+/* Standard normal CDF; erf via Abramowitz & Stegun 7.1.26 (abs. error < 1.5e-7). */
+function normalCdf(z) {
+  var x = Math.abs(z) / Math.SQRT2;
+  var t = 1 / (1 + 0.3275911 * x);
+  var poly = ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t;
+  var erf = 1 - poly * Math.exp(-x * x);
+  return z >= 0 ? 0.5 * (1 + erf) : 0.5 * (1 - erf);
+}
+
+/* L, M, S for a sex at a given age in months, linear between the neighbouring rows.
+   Only ages bracketed by two rows 1 month apart are supported (see CDC_LMS). */
+function lmsAt(ageMonths, sex) {
+  var rows = CDC_LMS[sex];
+  if (!rows) throw new RangeError('Unknown sex: ' + sex);
+  for (var i = 0; i < rows.length - 1; i++) {
+    var lo = rows[i], hi = rows[i + 1];
+    if (ageMonths >= lo[0] && ageMonths <= hi[0] && hi[0] - lo[0] <= 1) {
+      var f = (ageMonths - lo[0]) / (hi[0] - lo[0]);
+      return {
+        L: lo[1] + f * (hi[1] - lo[1]),
+        M: lo[2] + f * (hi[2] - lo[2]),
+        S: lo[3] + f * (hi[3] - lo[3])
+      };
+    }
+  }
+  throw new RangeError('No CDC data embedded for age ' + ageMonths + ' months');
+}
+
+/* -> {percentile (0-100, unrounded), p95 (BMI at the 95th percentile)} */
+function cdcPercentile(bmiValue, ageMonths, sex) {
+  var p = lmsAt(ageMonths, sex);
+  var z = (Math.pow(bmiValue / p.M, p.L) - 1) / (p.L * p.S);
+  return {
+    percentile: normalCdf(z) * 100,
+    p95: p.M * Math.pow(1 + p.L * p.S * Z_95, 1 / p.L)
+  };
+}
+
+/* Displayed percentile: truncated (never rounds up into a higher label), "<1st" / ">99th" at the ends. */
+function formatPercentile(percentile) {
+  if (percentile >= 99) return '>99th';
+  if (percentile < 1) return '<1st';
+  var n = Math.floor(percentile);
+  var tens = n % 100, ones = n % 10;
+  var suffix = 'th';
+  if (tens < 11 || tens > 13) {
+    if (ones === 1) suffix = 'st';
+    else if (ones === 2) suffix = 'nd';
+    else if (ones === 3) suffix = 'rd';
+  }
+  return n + suffix;
+}
+
+/* Lightest and heaviest weight, in steps of 0.1 of the unit, whose DISPLAYED (1 dp) BMI is
+   healthy (18.5 to 24.9). toKg converts the unit to kg. Starts near the answer, then walks to it. */
+function healthyEdges(heightM, toKg) {
+  var lo = THRESHOLDS.adult.healthy, hi = THRESHOLDS.healthyMaxBmi;
+  function shown(tenths) { return round1(bmi(toKg(tenths / 10), heightM)); }
+  var first = Math.round(lo * heightM * heightM * 10 / toKg(1));
+  while (shown(first - 1) >= lo) first -= 1;
+  while (shown(first) < lo) first += 1;
+  var last = Math.round(hi * heightM * heightM * 10 / toKg(1));
+  while (shown(last + 1) <= hi) last += 1;
+  while (shown(last) > hi) last -= 1;
+  return { min: first / 10, max: last / 10 };
+}
+
+/* Healthy weight range at this height, in kg and (computed directly, not converted) in lb. */
+function healthyWeightRange(heightM) {
+  var kg = healthyEdges(heightM, function (x) { return x; });
+  var lb = healthyEdges(heightM, lbToKg);
+  return { minKg: kg.min, maxKg: kg.max, minLb: lb.min, maxLb: lb.max };
+}
+
+/* ---------- Validation + route choice: the ONLY place for both ---------- */
+
+/* Each check returns one error object {error, field}, or null when the value is fine. */
+
+function checkHeight(p) {
+  if (p.imperial) {
+    var part = LIMITS.imperial.inchesPart;
+    if (isNaN(p.feet)) {
+      return { error: badNumberCode(p.raw.heightFt), field: 'height' };
+    } else if (isNaN(p.inches)) {
+      return { error: 'NOT_A_NUMBER', field: 'height' };   // a blank inches box counts as 0, so this is text
+    } else if (p.feet !== Math.floor(p.feet)) {
+      return { error: 'HEIGHT_FEET_NOT_WHOLE', field: 'height' };
+    } else if (p.inches < part.min || p.inches >= part.maxExclusive) {
+      return { error: 'HEIGHT_OUT_OF_RANGE', field: 'height' };
+    }
+  } else if (isNaN(p.heightCm)) {
+    return { error: badNumberCode(p.raw.heightCm), field: 'height' };
+  }
+  var cm = round1(p.heightCm);   // typed metric and converted imperial values are judged the same way
+  if (cm < LIMITS.metric.heightCm.min || cm > LIMITS.metric.heightCm.max) {
+    return { error: 'HEIGHT_OUT_OF_RANGE', field: 'height' };
+  }
+  return null;
+}
+
+/* Weight is read in the unit it was typed in, then checked in kg (rounded to 0.1). */
+function checkWeight(p) {
+  var typed = p.imperial ? p.raw.weightLb : p.raw.weightKg;
+  if (isNaN(p.weightKg)) {
+    return { error: badNumberCode(typed), field: 'weight' };
+  }
+  var kg = round1(p.weightKg);
+  if (kg < LIMITS.metric.weightKg.min || kg > LIMITS.metric.weightKg.max) {
+    return { error: 'WEIGHT_OUT_OF_RANGE', field: 'weight' };
+  }
+  return null;
+}
+
+/* Height and weight together. validate() calls this only when both passed on their own. */
+function checkCombination(p) {
+  var shownBmi = round1(bmi(p.weightKg, p.heightCm / 100));
+  if (shownBmi < LIMITS.bmi.min || shownBmi > LIMITS.bmi.max) {
+    return { error: 'BMI_IMPLAUSIBLE', field: 'height' };
+  }
+  return null;
+}
+
+function checkAge(p) {
+  if (isNaN(p.age)) {
+    return { error: badNumberCode(p.raw.age), field: 'age' };
+  } else if (p.age !== Math.floor(p.age)) {
+    return { error: 'AGE_NOT_WHOLE', field: 'age' };
+  } else if (p.age < LIMITS.age.min || p.age > LIMITS.age.max) {
+    return { error: 'AGE_OUT_OF_RANGE', field: 'age' };
+  }
+  return null;
+}
+
+function checkSex(input) {
+  if (input.sex !== 'male' && input.sex !== 'female') {
+    return { error: 'SEX_REQUIRED', field: 'sex' };
+  }
+  return null;
+}
+
+/* Parse once and list all problems in form order (height, weight, combination, age, sex).
+   -> {errors: [{error, field}], parsed} ; assess() reuses `parsed`. */
+function validate(input) {
+  var p = readInput(input);
+  var errors = [];
+
+  function add(error) { if (error) errors.push(error); }
+
+  var h = checkHeight(p);
+  var w = checkWeight(p);
+  add(h);
+  add(w);
+  if (!h && !w) add(checkCombination(p));
+  add(checkAge(p));
+  add(checkSex(input));
+  return { errors: errors, parsed: p };
+}
+
+function adultCategory(roundedBmi) {
+  if (roundedBmi < THRESHOLDS.adult.healthy) return 'underweight';
+  if (roundedBmi < THRESHOLDS.adult.overweight) return 'healthy';
+  if (roundedBmi < THRESHOLDS.adult.obesity) return 'overweight';
+  return 'obesity';
+}
+
+function teenCategory(percentile, roundedBmi, p95) {
+  var cut = THRESHOLDS.teenPercentile, severe = THRESHOLDS.severe;
+  if (roundedBmi >= severe.bmi || roundedBmi >= severe.p95Multiple * p95) return 'severe';
+  if (percentile < cut.healthy) return 'underweight';
+  if (percentile < cut.overweight) return 'healthy';
+  if (percentile < cut.obesity) return 'overweight';
+  return 'obesity';
+}
+
+/* Teen route: percentile of the DISPLAYED BMI, so equal BMIs always give equal percentile and label. */
+function assessTeen(result, shown, age, sex) {
+  var cdc = cdcPercentile(shown, age * 12 + TEEN_ROUTE.ageMonthsOffset, sex);
+  result.route = 'teen';
+  result.percentile = cdc.percentile;
+  result.percentileLabel = formatPercentile(cdc.percentile);
+  result.p95 = cdc.p95;
+  result.category = teenCategory(cdc.percentile, shown, cdc.p95);
+  result.bodyFat = null;
+  result.healthyRange = null;
+}
+
+/* Adult route: `value` is the unrounded BMI used by the body-fat formulas. */
+function assessAdult(result, value, shown, heightM, age, sex) {
+  result.route = 'adult';
+  result.category = adultCategory(shown);
+  result.bodyFat = bodyFat(value, age, sex);
+  // The range is for the height at the 0.1 cm precision that validation uses (5 ft 10.87 in = 180.0 cm).
+  result.healthyRange = healthyWeightRange(round1(heightM * 100) / 100);
+}
+
+/* input: {units:'metric'|'imperial', heightCm, weightKg, heightFt, heightIn, weightLb, age, sex}
+   -> result object, or {error, field, errors} (errors = every problem, form order). */
+function assess(input) {
+  var checked = validate(input);
+  var errors = checked.errors;
+  if (errors.length) return { error: errors[0].error, field: errors[0].field, errors: errors };
+
+  var p = checked.parsed;
+  var heightM = p.heightCm / 100;
+  var age = p.age;
+  var value = bmi(p.weightKg, heightM);   // unrounded: used by the body-fat formulas
+  var shown = round1(value);                    // displayed; decides the category
+
+  var result = { bmi: value, bmiRounded: shown, age: age, sex: input.sex };
+
+  if (age <= TEEN_ROUTE.maxAge) {
+    assessTeen(result, shown, age, input.sex);
+  } else {
+    assessAdult(result, value, shown, heightM, age, input.sex);
+  }
+  result.label = CATEGORY_LABELS[result.category];
+  result.olderAdultNote = age >= 65;
+  return result;
+}
+
+if (typeof module !== 'undefined' && module.exports) module.exports = {
+  toMetric: toMetric, bmi: bmi, bodyFat: bodyFat, cdcPercentile: cdcPercentile,
+  healthyWeightRange: healthyWeightRange, assess: assess,
+  lbToKg: lbToKg, kgToLb: kgToLb, ftInToCm: ftInToCm, cmToFtIn: cmToFtIn,
+  switchUnits: switchUnits, formatPercentile: formatPercentile,
+  parseNumber: parseNumber, CDC_LMS: CDC_LMS, LIMITS: LIMITS
+};
+</script>
+
+<script id="bmi-dom">
+/* ===== DOM only: reads fields, calls assess(), shows messages and the result. ===== */
+(function () {
+  var form = document.getElementById('bmi-form');
+  var resultBox = document.getElementById('bmi-result');
+
+  function $(id) { return document.getElementById(id); }
+  function currentUnits() { return $('units-imperial').checked ? 'imperial' : 'metric'; }
+
+  /* Each field name -> the controls that carry its invalid state, and its message element. */
+  var FIELDS = {
+    height: { inputs: function () { return currentUnits() === 'imperial' ? [$('height-ft'), $('height-in')] : [$('height-cm')]; }, error: $('height-error'), group: null },
+    weight: { inputs: function () { return [$('weight')]; }, error: $('weight-error'), group: null },
+    age:    { inputs: function () { return [$('age')]; }, error: $('age-error'), group: null },
+    sex:    { inputs: function () { return [$('sex-male'), $('sex-female')]; }, error: $('sex-error'), group: $('sex-segments'), host: $('sex-group') }
+  };
+
+  /* ---------- Reading the form ---------- */
+  function readValues() {
+    var sexInput = form.querySelector('input[name="sex"]:checked');
+    return {
+      units: currentUnits(),
+      heightCm: $('height-cm').value,
+      weightKg: $('weight').value,
+      heightFt: $('height-ft').value,
+      heightIn: $('height-in').value,
+      weightLb: $('weight').value,
+      age: $('age').value,
+      sex: sexInput ? sexInput.value : ''
+    };
+  }
+
+  /* ---------- Error messages ---------- */
+  function formatFtIn(totalIn) { return Math.floor(totalIn / 12) + ' ft ' + (totalIn % 12) + ' in'; }
+
+  /* Range text comes from the same LIMITS table that assess() validates against.
+     Imperial limits are the metric ones converted and rounded inward (up for a minimum, down for a maximum). */
+  function messageFor(err, units, values) {
+    var imperial = units === 'imperial';
+    var metric = LIMITS.metric;
+    switch (err.error) {
+      case 'MISSING_VALUE':
+        return 'Enter your ' + err.field;
+      case 'NOT_A_NUMBER':
+        return 'Use digits only, e.g. 70.5';
+      case 'AGE_OUT_OF_RANGE':
+        if (parseNumber(values.age) < LIMITS.age.min) {
+          return 'This calculator is for ages ' + LIMITS.age.min + ' and over';
+        }
+        // otherwise (101 and up) it shares the message below
+      case 'AGE_NOT_WHOLE':
+        return 'Age must be a whole number from ' + LIMITS.age.min + ' to ' + LIMITS.age.max;
+      case 'HEIGHT_FEET_NOT_WHOLE':
+        return 'Feet must be a whole number (e.g. 5 ft 11 in)';
+      case 'HEIGHT_OUT_OF_RANGE':
+        return imperial
+          ? 'Height must be ' + formatFtIn(Math.ceil(metric.heightCm.min / CM_PER_IN)) + ' to ' +
+            formatFtIn(Math.floor(metric.heightCm.max / CM_PER_IN))
+          : 'Height must be ' + metric.heightCm.min + ' to ' + metric.heightCm.max + ' cm';
+      case 'WEIGHT_OUT_OF_RANGE':
+        return imperial
+          ? 'Weight must be ' + Math.ceil(kgToLb(metric.weightKg.min)) + ' to ' + Math.floor(kgToLb(metric.weightKg.max)) + ' lb'
+          : 'Weight must be ' + metric.weightKg.min + ' to ' + metric.weightKg.max + ' kg';
+      case 'SEX_REQUIRED':
+        return 'Choose Male or Female';
+      case 'BMI_IMPLAUSIBLE':
+        return "Please check your height and weight \u2014 this combination isn't realistic.";
+    }
+    return 'Check this value';
+  }
+
+  function clearMarks(f) {
+    f.inputs().forEach(function (el) {
+      el.removeAttribute('aria-describedby');
+      el.removeAttribute('aria-invalid');
+      el.classList.remove('is-invalid');
+    });
+    if (f.group) { f.group.classList.remove('is-invalid'); f.host.removeAttribute('aria-invalid'); }
+  }
+
+  function clearError(name) {
+    var f = FIELDS[name];
+    f.error.hidden = true;
+    f.error.textContent = '';
+    if (name === 'height') {
+      // The combination message belongs to height AND weight: clear both together.
+      if (!$('form-error').hidden) clearMarks(FIELDS.weight);
+      $('form-error').hidden = true;
+      $('form-error').textContent = '';
+    }
+    clearMarks(f);
+    // Once no message is left on screen, the screen-reader summary is stale too.
+    var anyShown = !$('form-error').hidden || Object.keys(FIELDS).some(function (k) { return !FIELDS[k].error.hidden; });
+    if (!anyShown) $('error-summary').textContent = '';
+  }
+  function clearAllErrors() { Object.keys(FIELDS).forEach(clearError); }
+
+  function markInvalid(f, boxId) {
+    f.inputs().forEach(function (el) {
+      el.setAttribute('aria-describedby', boxId);
+      el.setAttribute('aria-invalid', 'true');
+      el.classList.add('is-invalid');
+    });
+  }
+
+  function showError(err, units, values) {
+    var f = FIELDS[err.field];
+    // The combination message is about two fields, so it sits just above Calculate.
+    var combination = err.error === 'BMI_IMPLAUSIBLE';
+    var box = combination ? $('form-error') : f.error;
+    box.textContent = 'Error: ' + messageFor(err, units, values);
+    box.hidden = false;
+    if (err.field === 'sex') {
+      f.inputs().forEach(function (el) { el.setAttribute('aria-describedby', box.id); });
+      f.host.setAttribute('aria-invalid', 'true');
+      f.group.classList.add('is-invalid');
+    } else {
+      markInvalid(f, box.id);
+    }
+    if (combination) markInvalid(FIELDS.weight, box.id);
+  }
+
+  /* "3 fields need attention: height, age, sex" for screen readers (form order; the combination error names height and weight). */
+  function summaryFor(errors) {
+    var names = [];
+    errors.forEach(function (err) {
+      names.push(err.field);
+      if (err.error === 'BMI_IMPLAUSIBLE') names.push('weight');
+    });
+    return names.length + (names.length === 1 ? ' field needs' : ' fields need') + ' attention: ' + names.join(', ');
+  }
+
+  /* ---------- Result card ---------- */
+  function el(tag, className, text) {
+    var node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  function formatWeightRange(range, units) {
+    if (units === 'imperial') {
+      return range.minLb.toFixed(1) + '–' + range.maxLb.toFixed(1) + ' lb';
+    }
+    return range.minKg.toFixed(1) + '–' + range.maxKg.toFixed(1) + ' kg';
+  }
+
+  function renderResult(r, units) {
+    var tone = r.category === 'severe' ? 'obesity' : r.category;
+    var card = el('div', 'bmi__card bmi__card--' + tone);
+
+    var summary = 'Your BMI is ' + r.bmiRounded.toFixed(1) + ': ' + r.label +
+      (r.route === 'teen' ? ', at the ' + r.percentileLabel + ' percentile for age and sex.' : '.');
+    card.appendChild(el('p', 'bmi__sr-only', summary));
+
+    // The summary above is what screen readers hear; the visual lines that repeat it are hidden from them.
+    function visualOnly(node) { node.setAttribute('aria-hidden', 'true'); return node; }
+    card.appendChild(visualOnly(el('p', 'bmi__bmi-label', 'Your BMI')));
+    card.appendChild(visualOnly(el('p', 'bmi__bmi-value', r.bmiRounded.toFixed(1))));
+    card.appendChild(visualOnly(el('p', 'bmi__category', r.label)));
+
+    if (r.route === 'teen') {
+      card.appendChild(visualOnly(el('p', 'bmi__percentile', r.percentileLabel + ' percentile for age and sex (CDC)')));
+      card.appendChild(el('p', 'bmi__muted',
+        'BMI-for-age compares you with others of the same age and sex. No body-fat estimate is shown under 20.'));
+    } else {
+      var bf = r.bodyFat;
+      card.appendChild(el('p', 'bmi__bodyfat', 'Estimated body fat: about ' + bf.average.toFixed(1) + '%'));
+      card.appendChild(el('p', null, 'Formulas ranged ' + bf.min.toFixed(1) + '–' + bf.max.toFixed(1) + '%'));
+      card.appendChild(el('p', 'bmi__muted',
+        'An estimate from height, weight, age and sex; measured body fat can differ by several points.'));
+      if (bf.clamped) {
+        card.appendChild(el('p', null,
+          'At this BMI the formulas fall outside the range they were developed for; this estimate is unreliable.'));
+      }
+      card.appendChild(el('p', 'bmi__healthy',
+        'Healthy weight for your height: ' + formatWeightRange(r.healthyRange, units)));
+      if (r.olderAdultNote) {
+        card.appendChild(el('p', 'bmi__muted', 'BMI can underestimate body fat in older adults.'));
+      }
+    }
+
+    card.appendChild(el('p', 'bmi__muted', 'Screening tool, not medical advice.'));
+
+    resultBox.textContent = '';
+    resultBox.appendChild(card);
+    card.scrollIntoView({ block: 'nearest' });   // focus stays where it is
+  }
+
+  function hideResult() { resultBox.textContent = ''; }
+
+  /* ---------- Events ---------- */
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var values = readValues();
+    var result = assess(values);
+    clearAllErrors();
+
+    if (result.error) {
+      hideResult();
+      result.errors.forEach(function (err) { showError(err, values.units, values); });
+      $('error-summary').textContent = summaryFor(result.errors);
+      var first = FIELDS[result.field].inputs()[0];
+      first.focus();
+      return;
+    }
+    renderResult(result, values.units);
+  });
+
+  /* Any edit or unit switch makes a shown result stale, so hide it. */
+  form.addEventListener('input', hideResult);
+  form.addEventListener('change', hideResult);
+
+  /* Editing a field clears its own message. */
+  ['height-cm', 'height-ft', 'height-in'].forEach(function (id) {
+    $(id).addEventListener('input', function () { clearError('height'); });
+  });
+  $('weight').addEventListener('input', function () {
+    clearError('weight');
+    if (!$('form-error').hidden) clearError('height');   // combination message involves both fields
+  });
+  $('age').addEventListener('input', function () { clearError('age'); });
+  form.querySelectorAll('input[name="sex"]').forEach(function (r) {
+    r.addEventListener('change', function () { clearError('sex'); });
+  });
+
+  /* Unit switch: convert what is typed, relabel, swap the height controls. */
+  form.querySelectorAll('input[name="units"]').forEach(function (r) {
+    r.addEventListener('change', function () {
+      var units = currentUnits();
+      var typed = readValues();
+      // Values typed in the old unit live in the old unit's fields.
+      var from = units === 'imperial'
+        ? { heightCm: typed.heightCm, weightKg: typed.weightKg }
+        : { heightFt: typed.heightFt, heightIn: typed.heightIn, weightLb: typed.weightLb };
+      var converted = switchUnits(from, units);
+
+      clearAllErrors();
+      if (units === 'imperial') {
+        $('height-ft').value = converted.heightFt;
+        $('height-in').value = converted.heightIn;
+        $('weight').value = converted.weightLb;
+      } else {
+        $('height-cm').value = converted.heightCm;
+        $('weight').value = converted.weightKg;
+      }
+      $('height-metric').hidden = units === 'imperial';
+      $('height-imperial').hidden = units !== 'imperial';
+      $('weight-label').textContent = units === 'imperial' ? 'Weight (lb)' : 'Weight (kg)';
+      hideResult();
+    });
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "bmi-calculator",
+  "version": "1.0.0",
+  "description": "An age- and sex-aware BMI calculator in a single HTML file (vanilla HTML, CSS and JS).",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/bmi.test.js",
+    "test:browser": "python3 tests/browser_test.py",
+    "coverage": "node tests/coverage.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
